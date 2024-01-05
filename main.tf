@@ -1,8 +1,5 @@
 provider "aws" {
-  region     = "us-east-1"
-  access_key = "AASIASNGYRHWOGOXANIRJ"
-  secret_key = "tNZ8A98nnIYO8CFsd26PFSaNMaEPzbuIazkkph7m"
-  token      = "IQoJb3JpZ2luX2VjENr//////////wEaCXVzLWVhc3QtMSJHMEUCIBEkJn6ynZbFZPqoTsEAXygNrqt+b1oxLD5v9R8/ZgFUAiEAr9SsmTMaC7hNpAYUbWOH/rQnSs3mfTg36N8iEfhBPZ4q6wIIchABGgwxNjU4MTAzNTU2MTIiDPl9J/pmpFNL8ZW2iSrIAiD9Pw6QVGMahkUectSWAZruzh/vQlIZLVU4dxawBK3LIE34+Ih/SxwOHpPh0C84wEO8ORuHk1vQMHiHjKFCJKTlA6I3+ytaQYSpcPdUotnRHzw1jsX44hQ9xf4yDH9Ft4bL5s/I5BCLBH7C3EQD87pOvsoxwMRuCsN2hDhJ4xf/yMSx0wcDFWxGilbCIbXOWDdi4otwdSZnEjwHgw2cSY16YJNaa5ldfRCU4qkK4vK6eQAmvsMWAvJuVCisIRLrkNk49Ksvdj1NcKCXzZR0nUkPhSyFb5FQzAEA9WvaLh0OKkrIIPzJvCfC898VAHC16hDG1Lim0GW8NtZQi5MTIwaoyvq44T/oBGd3tTJtiuevJngQSMDMRgwJBuLz79oE6FlE+G2SvmRiTc4ES3oDHrTg+0if1vx26yE4uuv+/ZTIdp8L9fZlp0kwl/HZrAY6pwGHcMSANoEDetRgwPfGTU81K56xSCtNwg2Q2KKxitRenWsb6y1+E+BA+prP9NPWhSn9WtW6QN+ECpH9UP+wzDec5T8Hj8/cDEd4QJJeRBA58mb7Ji/O76n0IkWHuZZM3CCr/Dko+fP+ztcx56rGIo6m+WiT+fx1WIAZNSI9bqa2YQzp6LuBOIbflstYwVmg+01WOQx5AxwdBdZ9grf15gDYZdOM3AcLiQ=="
+  region = "us-east-1"
 }
 
 variable "subnet_cidr_block" {
@@ -12,19 +9,87 @@ variable "subnet_cidr_block" {
 variable "vpc_cidr_block" {
   description = "vpc cidr block"
 }
+
+variable "env_prefix" {
+  description = "Environment variable"
+}
+
+variable "availability_zone" {
+  description = "Availibility zone"
+}
+
+variable "my_ipl" {
+  description = "MY pc IP for ssh "
+}
+
 #created new VPC 
-resource "aws_vpc" "development-vpc" {
+resource "aws_vpc" "myapp-vpc" {
   cidr_block = var.vpc_cidr_block
   tags = {
-    Name = "Development"
+    Name = "${var.env_prefix}-vpc" # this is env variable prefix  HINT: if we want varaible inside the string we use ${var.eg} and if we want out side the string we just use var.etc
   }
 }
 # created new Subnet
-resource "aws_subnet" "dev-subnet-1" {
-  vpc_id            = aws_vpc.development-vpc.id
+resource "aws_subnet" "myapp-subnet-1" {
+  vpc_id            = aws_vpc.myapp-vpc.id
   cidr_block        = var.subnet_cidr_block # "10.0.10.0/24"
-  availability_zone = "us-east-1a"
+  availability_zone = var.availability_zone
   tags = {
-    Name = "Dev-subnet"
+    Name = "${var.env_prefix}-subnet-1"
   }
 }
+
+
+resource "aws_route_table" "myapp-route-table" {
+  vpc_id = aws_vpc.myapp-vpc.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.myappigw.id
+  }
+  tags = {
+    Name = "${var.env_prefix}-rtb"
+  }
+}
+
+resource "aws_internet_gateway" "myappigw" {
+  vpc_id = aws_vpc.myapp-vpc.id
+  tags = {
+    Name = "${var.env_prefix}-igw"
+  }
+}
+
+resource "aws_route_table_association" "a-rtb-subnet" {
+  subnet_id      = aws_subnet.myapp-subnet-1.id
+  route_table_id = aws_route_table.myapp-route-table.id
+}
+
+resource "aws_security_group" "myapp-sg" {
+  name   = "myapp-sg"
+  vpc_id = aws_vpc.myapp-vpc.id
+
+  ingress { # ingress meand inbound rule or request comming in like ssh to server
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = var.my_ipl # list of ip where we will access a server
+  }
+  ingress {
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  egress {
+    from_port       = 0
+    to_port         = 0
+    protocol        = "-1"
+    cidr_blocks     = ["0.0.0.0/0"]
+    prefix_list_ids = []
+  }
+
+  tags = {
+    Name = "${var.env_prefix}-sg"
+  }
+}
+
