@@ -22,6 +22,10 @@ variable "my_ipl" {
   description = "MY pc IP for ssh "
 }
 
+variable "instance_type" {
+  description = "Instance type"
+}
+
 #created new VPC 
 resource "aws_vpc" "myapp-vpc" {
   cidr_block = var.vpc_cidr_block
@@ -93,3 +97,45 @@ resource "aws_security_group" "myapp-sg" {
   }
 }
 
+data "aws_ami" "latest-amazon-linux-image" {
+  most_recent = true
+  owners      = ["amazon"]
+  filter {
+    name   = "name"
+    values = ["al2023-ami-2023.3.20231218.0-kernel-6.1-x86_64"]
+  }
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
+output "aws_ami_id" {
+  value = data.aws_ami.latest-amazon-linux-image.id
+}
+
+output "vpc_security_group_ids" {
+  value = aws_security_group.myapp-sg.id
+}
+
+output "ec2_public_ip" {
+  value = aws_instance.myapp-server.public_ip
+}
+resource "aws_instance" "myapp-server" {
+  ami           = data.aws_ami.latest-amazon-linux-image.id
+  instance_type = var.instance_type
+
+  subnet_id              = aws_subnet.myapp-subnet-1.id
+  vpc_security_group_ids = [aws_security_group.myapp-sg.id]
+  availability_zone      = var.availability_zone
+
+  associate_public_ip_address = true
+  key_name                    = "aws-login"
+
+  user_data = file("start_script.sh") # it is a script file that will run aws instance Hint but not recommened use ansible
+
+  tags = {
+    Name = "${var.env_prefix}-server"
+  }
+
+}
